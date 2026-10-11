@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buchstaben & Silben Lern-App</title>
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --secondary: #FF9F43;
+            --success: #2ECC71;
+            --bg: #F4F7F6;
+            --card: #FFFFFF;
+            --text: #2C3E50;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 { color: var(--primary); margin-bottom: 5px; }
+        .score-board { font-size: 1.4rem; font-weight: bold; margin-bottom: 20px; color: var(--secondary); }
+
+        .grid-menu {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .btn:active { transform: scale(0.98); }
+        .btn-secondary { background-color: var(--secondary); }
+        .btn-success { background-color: var(--success); }
+        .btn-full { grid-column: span 2; }
+
+        .hidden { display: none !important; }
+
+        .game-area { margin-top: 20px; }
+        .big-text { font-size: 2.5rem; font-weight: bold; margin: 20px 0; letter-spacing: 2px; }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .option-btn {
+            background: #EEE;
+            color: #333;
+            font-size: 1.5rem;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #DDD;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .letter-selector {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 5px;
+            max-height: 250px;
+            overflow-y: auto;
+            margin: 15px 0;
+            padding: 10px;
+            background: #F9F9F9;
+            border-radius: 10px;
+        }
+
+        .letter-btn {
+            padding: 10px;
+            background: #FFF;
+            border: 1px solid #CCC;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .letter-btn.selected {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .speaker-btn {
+            background: none;
+            border: none;
+            font-size: 2.5rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🔤 Buchstaben & Silben</h1>
+    <div class="score-board">Sterne: <span id="stars">⭐ 0</span></div>
+
+    <!-- MAIN MENU -->
+    <div id="main-menu" class="grid-menu">
+        <button class="btn btn-full btn-secondary" onclick="openFilter()">⚙️ Gelernte Buchstaben wählen</button>
+        <button class="btn" onclick="startGame(1)">1. Anlaute finden 🔤</button>
+        <button class="btn" onclick="startGame(2)">2. Silben trennen ✂️</button>
+        <button class="btn" onclick="startGame(3)">3. Silben bauen 🧩</button>
+        <button class="btn" onclick="startGame(4)">4. Sätze bauen 📝</button>
+    </div>
+
+    <!-- LETTER FILTER MENU -->
+    <div id="filter-menu" class="hidden">
+        <h3>Gelernte Buchstaben auswählen:</h3>
+        <div style="margin-bottom: 10px;">
+            <button class="btn" onclick="selectPreset('start')">Start-Set (M,A,L,O,S,I,T,N)</button>
+            <button class="btn" onclick="selectPreset('all')">Alle</button>
+        </div>
+        <div id="letter-grid" class="letter-selector"></div>
+        <button class="btn btn-success btn-full" onclick="closeFilter()">Speichern & Zurück</button>
+    </div>
+
+    <!-- GAME AREA -->
+    <div id="game-area" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <button class="btn" onclick="showMenu()">⬅️ Menü</button>
+            <button class="speaker-btn" onclick="speakCurrent()">🔊</button>
+        </div>
+        
+        <div id="game-content">
+            <div id="question" class="big-text"></div>
+            <div id="options" class="options-grid"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ".split("");
+    let learnedLetters = JSON.parse(localStorage.getItem("learnedLetters")) || ["M", "A", "L", "O", "S", "I", "T", "N"];
+    let stars = 0;
+    let currentGame = 0;
+    let currentTarget = "";
+
+    const WORDS = [
+        { word: "MAMA", syllables: ["MA", "MA"], start: "M" },
+        { word: "OMA", syllables: ["O", "MA"], start: "O" },
+        { word: "LAMA", syllables: ["LA", "MA"], start: "L" },
+        { word: "SALAT", syllables: ["SA", "LAT"], start: "S" },
+        { word: "TOMATE", syllables: ["TO", "MA", "TE"], start: "T" },
+        { word: "INSEL", syllables: ["IN", "SEL"], start: "I" },
+        { word: "NASE", syllables: ["NA", "SE"], start: "N" },
+        { word: "EULE", syllables: ["EU", "LE"], start: "E" },
+        { word: "SONNE", syllables: ["SON", "NE"], start: "S" }
+    ];
+
+    const SENTENCES = [
+        "MAMA LIEBT OMA",
+        "DAS LAMA ISST SALAT",
+        "DIE SONNE SCHEINT",
+        "OMA ISST TOMATE"
+    ];
+
+    function initFilter() {
+        const grid = document.getElementById("letter-grid");
+        grid.innerHTML = "";
+        ALL_LETTERS.forEach(l => {
+            const btn = document.createElement("button");
+            btn.className = `letter-btn ${learnedLetters.includes(l) ? 'selected' : ''}`;
+            btn.innerText = l;
+            btn.onclick = () => {
+                if (learnedLetters.includes(l)) {
+                    learnedLetters = learnedLetters.filter(item => item !== l);
+                } else {
+                    learnedLetters.push(l);
+                }
+                localStorage.setItem("learnedLetters", JSON.stringify(learnedLetters));
+                btn.classList.toggle("selected");
+            };
+            grid.appendChild(btn);
+        });
+    }
+
+    function selectPreset(type) {
+        if (type === 'start') learnedLetters = ["M", "A", "L", "O", "S", "I", "T", "N"];
+        if (type === 'all') learnedLetters = [...ALL_LETTERS];
+        localStorage.setItem("learnedLetters", JSON.stringify(learnedLetters));
+        initFilter();
+    }
+
+    function openFilter() {
+        document.getElementById("main-menu").classList.add("hidden");
+        document.getElementById("filter-menu").classList.remove("hidden");
+        initFilter();
+    }
+
+    function closeFilter() {
+        document.getElementById("filter-menu").classList.add("hidden");
+        document.getElementById("main-menu").classList.remove("hidden");
+    }
+
+    function showMenu() {
+        document.getElementById("game-area").classList.add("hidden");
+        document.getElementById("filter-menu").classList.add("hidden");
+        document.getElementById("main-menu").classList.remove("hidden");
+    }
+
+    function speak(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const msg = new SpeechSynthesisUtterance(text);
+            msg.lang = 'de-DE';
+            window.speechSynthesis.speak(msg);
+        }
+    }
+
+    function speakCurrent() {
+        if (currentTarget) speak(currentTarget);
+    }
+
+    function addStar() {
+        stars++;
+        document.getElementById("stars").innerText = `⭐ ${stars}`;
+    }
+
+    function getFilteredWords() {
+        let list = WORDS.filter(w => learnedLetters.includes(w.start));
+        return list.length > 0 ? list : WORDS;
+    }
+
+    function startGame(gameNum) {
+        currentGame = gameNum;
+        document.getElementById("main-menu").classList.add("hidden");
+        document.getElementById("game-area").classList.remove("hidden");
+        nextTurn();
+    }
+
+    function nextTurn() {
+        const optionsDiv = document.getElementById("options");
+        const qDiv = document.getElementById("question");
+        optionsDiv.innerHTML = "";
+        
+        const validWords = getFilteredWords();
+        const randomItem = validWords[Math.floor(Math.random() * validWords.length)];
+
+        if (currentGame === 1) { // Anlaute
+            currentTarget = randomItem.word;
+            qDiv.innerText = randomItem.word;
+            speak(randomItem.word);
+
+            let choices = [randomItem.start];
+            while (choices.length < 3) {
+                let r = learnedLetters[Math.floor(Math.random() * learnedLetters.length)] || "A";
+                if (!choices.includes(r)) choices.push(r);
+            }
+            choices.sort(() => Math.random() - 0.5);
+
+            choices.forEach(c => {
+                const b = document.createElement("button");
+                b.className = "option-btn";
+                b.innerText = c;
+                b.onclick = () => {
+                    if (c === randomItem.start) {
+                        addStar();
+                        nextTurn();
+                    } else {
+                        speak("Versuche es noch einmal");
+                    }
+                };
+                optionsDiv.appendChild(b);
+            });
+        } 
+        else if (currentGame === 2) { // Silben trennen
+            currentTarget = randomItem.word;
+            qDiv.innerText = randomItem.word;
+            speak(randomItem.word);
+
+            const count = randomItem.syllables.length;
+            [1, 2, 3].forEach(num => {
+                const b = document.createElement("button");
+                b.className = "option-btn";
+                b.innerText = `${num} Silbe(n)`;
+                b.onclick = () => {
+                    if (num === count) {
+                        addStar();
+                        nextTurn();
+                    } else {
+                        speak("Nein, versuche es nochmal");
+                    }
+                };
+                optionsDiv.appendChild(b);
+            });
+        }
+        else if (currentGame === 3) { // Silben bauen
+            currentTarget = randomItem.word;
+            qDiv.innerText = randomItem.syllables.join(" - ");
+            speak(randomItem.word);
+
+            let choices = [...randomItem.syllables].sort(() => Math.random() - 0.5);
+            let built = [];
+
+            choices.forEach(syl => {
+                const b = document.createElement("button");
+                b.className = "option-btn";
+                b.innerText = syl;
+                b.onclick = () => {
+                    built.push(syl);
+                    speak(syl);
+                    if (built.length === randomItem.syllables.length) {
+                        if (built.join("") === randomItem.word) {
+                            addStar();
+                            setTimeout(nextTurn, 500);
+                        } else {
+                            speak("Falsch zusammengesetzt");
+                            built = [];
+                        }
+                    }
+                };
+                optionsDiv.appendChild(b);
+            });
+        }
+        else if (currentGame === 4) { // Sätze bauen
+            const s = SENTENCES[Math.floor(Math.random() * SENTENCES.length)];
+            currentTarget = s;
+            qDiv.innerText = "Baue den Satz!";
+            speak(s);
+
+            let words = s.split(" ");
+            let shuffled = [...words].sort(() => Math.random() - 0.5);
+            let constructed = [];
+
+            shuffled.forEach(w => {
+                const b = document.createElement("button");
+                b.className = "option-btn";
+                b.innerText = w;
+                b.onclick = () => {
+                    constructed.push(w);
+                    speak(w);
+                    b.disabled = true;
+                    b.style.opacity = 0.4;
+
+                    if (constructed.length === words.length) {
+                        if (constructed.join(" ") === s) {
+                            addStar();
+                            setTimeout(nextTurn, 1000);
+                        } else {
+                            speak("Der Satz ist noch nicht ganz richtig.");
+                            setTimeout(nextTurn, 1000);
+                        }
+                    }
+                };
+                optionsDiv.appendChild(b);
+            });
+        }
+    }
+</script>
+</body>
+</html>
